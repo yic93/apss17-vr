@@ -182,6 +182,9 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     size_t global_size[2] = {N, N};
     size_t local_size[2] = {8, 8};
 
+    while (global_size[0] % local_size[0] != 0) local_size[0]++;
+    while (global_size[1] % local_size[1] != 0) local_size[1]++;
+
 #ifdef PROFILING
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, &run_event);
     CHECK_ERROR(err);

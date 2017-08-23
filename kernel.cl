@@ -25,5 +25,5 @@ __kernel void recover_video(__global unsigned char* R,
     }
 
     diffMat[i * N + j] = dImg;
-    //diffMat[j * N + i] = dImg;
+    diffMat[j * N + i] = dImg;
 }
