@@ -1,0 +1,9 @@
+*.swp
+*.o
+
+data
+
+task*
+
+result*
+
