@@ -5,6 +5,7 @@ __kernel void recover_video(__global unsigned char* R,
                        int H,
                        int W,
                        __global float* diffMat) {
+    /*
     __private int index = get_global_id(0);
     __private int k = N;
     while (index >= 0) {
@@ -13,9 +14,10 @@ __kernel void recover_video(__global unsigned char* R,
 
     __private int i = N - k - 1;
     __private int j = N + index;
+    */
     //
-    //__private int i = get_global_id(0);
-    //__private int j = get_global_id(1);
+    __private int i = get_global_id(0);
+    __private int j = get_global_id(1);
 
     __private int _w, _h;
     __private float dImg = 0;
