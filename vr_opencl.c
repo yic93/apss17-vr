@@ -172,37 +172,33 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
 
     err = clSetKernelArg(kernel, 6, sizeof(cl_mem), &memDiffMat);
     CHECK_ERROR(err);
-    printf("f"); fflush(stdout);
 
 
     // run kernel
     size_t global_size[2] = {N, N};
     size_t local_size[2] = {8, 8};
 
-    //while (global_size % local_size != 0) global_size++;
-    //while (global_size[1] % local_size[1] != 0) local_size[1]++;
+    while (global_size[0] % local_size[0] != 0) global_size[0]++;
+    while (global_size[1] % local_size[1] != 0) global_size[1]++;
 
-    printf("f"); fflush(stdout);
+
 #ifdef PROFILING
+    printf("\n[global, local] %d %d %d %d\n", global_size[0], global_size[1], local_size[0], local_size[1]);
+
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, &run_event);
     CHECK_ERROR(err);
 
-    printf("f"); fflush(stdout);
     // enqueue read buffer
     err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, &read_event);
     CHECK_ERROR(err);
-    printf("f"); fflush(stdout);
 #else
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, NULL);
     CHECK_ERROR(err);
-    printf("f"); fflush(stdout);
 
     // enqueue read buffer
     err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, NULL);
     CHECK_ERROR(err);
-    printf("f"); fflush(stdout);
 #endif
-    printf("f"); fflush(stdout);
 
     err = clFlush(queue);
     CHECK_ERROR(err);
