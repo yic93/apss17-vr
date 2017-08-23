@@ -19,6 +19,8 @@ __kernel void recover_video(__global unsigned char* R,
     __private int i = get_global_id(0);
     __private int j = get_global_id(1);
 
+    if (i < 0 || i >= N || j < 0 || j >= N) return;
+
     __private int _w, _h;
     __private float dImg = 0;
     for (_h = 0; _h < H; _h++) {
