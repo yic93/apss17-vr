@@ -45,13 +45,6 @@ char *get_source_code(const char *file_name, size_t *len) {
 }
 
 void init() {
-    /*
-     * TODO
-     * Input-independent jobs (e.g.., OpenCL initialization, kernel build, ...)
-     * go here. For example :
-     * clGetPlatformIDs(1, &platform, NULL);
-     */ 
-
     // get platform
     err = clGetPlatformIDs(1, &platform, NULL);
     CHECK_ERROR(err);

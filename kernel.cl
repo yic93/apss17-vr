@@ -9,12 +9,8 @@ __kernel void recover_video(__global unsigned char* R,
     __private int i = get_global_id(0);
     __private int j = get_global_id(1);
 
-    __private int _w;
-    __private int _h;
-
+    __private int _w, _h;
     __private float dImg = 0;
-
-
     for (_h = 0; _h < H; _h++) {
         for (_w = 0; _w < W; _w++) {
             __private int dPixel = 0;
@@ -29,5 +25,5 @@ __kernel void recover_video(__global unsigned char* R,
     }
 
     diffMat[i * N + j] = dImg;
-    diffMat[j * N + i] = dImg;
+    //diffMat[j * N + i] = dImg;
 }
