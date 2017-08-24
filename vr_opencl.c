@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sys/time.h>
 #include <CL/cl.h>
 
 #include "vr.h"
 
 #define PROFILING
+#define DEBUG
 
 #define CHECK_ERROR(err) \
     if (err != CL_SUCCESS) { \
@@ -43,6 +45,14 @@ char *get_source_code(const char *file_name, size_t *len) {
     *len = length;
     return source_code;
 }
+
+#ifdef PROFILING
+unsigned long get_time() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((tv.tv_sec * 100000) + tv.tv_usec) * 1000;
+}
+#endif
 
 void init() {
     // get platform
@@ -115,6 +125,7 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     cl_ulong run_start, run_end;
     cl_ulong read_start, read_end;
     cl_event run_event, read_event, write_event[3];
+    unsigned long cpu_start, cpu_end;
 #endif
 
     memR = clCreateBuffer(context, CL_MEM_READ_ONLY, rgb_size, NULL, &err);
@@ -193,7 +204,7 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
 
 
 #ifdef PROFILING
-    printf("\n[global, local] %d %d %d %d\n", global_size[0], global_size[1], local_size[0], local_size[1]);
+    printf("\n[workset] global: (%d, %d) / local: (%d, %d)\n", global_size[0], global_size[1], local_size[0], local_size[1]);
 
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, &run_event);
     CHECK_ERROR(err);
@@ -213,7 +224,7 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     //err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, NULL);
     //CHECK_ERROR(err);
 
-    err = clEnqueueReadBuffer(queue, memFrmaeMat, CL_FALSE, 0, float_nn_size * 60 * 60, diffFrameMat, 0, NULL, NULL);
+    err = clEnqueueReadBuffer(queue, memFrameMat, CL_FALSE, 0, float_nn_size * 60 * 60, diffFrameMat, 0, NULL, NULL);
     CHECK_ERROR(err);
 #endif
 
@@ -222,6 +233,10 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
 
     err = clFinish(queue);
     CHECK_ERROR(err);
+
+#ifdef PROFILING
+    cpu_start = get_time();
+#endif
 
     float *diffMat = (float*)malloc(N * N * sizeof(float));
     for (int i = 0; i < N; i++) {
@@ -236,6 +251,14 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
             diffMat[j * N + i] = sum;
         }
     }
+
+#ifdef DEBUG
+    FILE* fp = fopen("diff_mat_cl.txt", "w");
+    for (int i = 0; i < N * N; i++) {
+        fprintf(fp, "[%d] %f\n", i, diffMat[i]);
+    }
+    fclose(fp);
+#endif
 
     int *used = (int*)calloc(N, sizeof(int));
     vrIdx[0] = 0;
@@ -255,9 +278,13 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     }
 
 #ifdef PROFILING
+    cpu_end = get_time();
+#endif
+
+#ifdef PROFILING
     clGetEventProfilingInfo(write_event[0], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &write_start, NULL);
     clGetEventProfilingInfo(write_event[2], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &write_end, NULL);
-    printf("\n[write] %lu ns\n", (write_end - write_start));
+    printf("[write] %lu ns\n", (write_end - write_start));
 
     clGetEventProfilingInfo(run_event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &run_start, NULL);
     clGetEventProfilingInfo(run_event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &run_end, NULL);
@@ -266,6 +293,8 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     clGetEventProfilingInfo(read_event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &read_start, NULL);
     clGetEventProfilingInfo(read_event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &read_end, NULL);
     printf("[read] %lu ns\n", (read_end - read_start));
+
+    printf("[cpu] %lu ns\n", (cpu_end - cpu_start));
 #endif
 
     return;

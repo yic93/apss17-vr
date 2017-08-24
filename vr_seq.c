@@ -4,6 +4,8 @@
 
 #include "vr.h"
 
+#define DEBUG
+
 void init() {
     // dummy
 }
@@ -39,6 +41,14 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
             diffMat[j * N + i] = dImg;
         }
     }
+
+#ifdef DEBUG
+    FILE* fp = fopen("diff_mat_seq.txt", "w");
+    for (int i = 0; i < N * N; i++) {
+        fprintf(fp, "[%d] %f\n", i, diffMat[i]);
+    }
+    fclose(fp);
+#endif
 
     // used[i] : 1 if frame i is already ordered, 0 otherwise
     int *used = (int*)calloc(N, sizeof(int));
