@@ -7,7 +7,7 @@
 #include "vr.h"
 
 #define PROFILING
-#define DEBUG
+//#define DEBUG
 
 #define CHECK_ERROR(err) \
     if (err != CL_SUCCESS) { \
@@ -19,7 +19,7 @@ cl_int err;
 cl_platform_id platform;
 cl_device_id device;
 cl_context context;
-cl_command_queue queue;
+cl_command_queue queue[2];
 cl_program program;
 cl_kernel kernel;
 
@@ -69,11 +69,18 @@ void init() {
 
     // create command queue
 #ifdef PROFILING
-    queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
-#else
-    queue = clCreateCommandQueue(context, device, 0, &err);
-#endif
+    queue[0] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
     CHECK_ERROR(err);
+
+    queue[1] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
+    CHECK_ERROR(err);
+#else
+    queue[0] = clCreateCommandQueue(context, device, 0, &err);
+    CHECK_ERROR(err);
+
+    queue[1] = clCreateCommandQueue(context, device, 0, &err);
+    CHECK_ERROR(err);
+#endif
 
     // get source code
     size_t source_size;
@@ -108,130 +115,129 @@ void init() {
 
 void release() {
     clReleaseContext(context);
-    clReleaseCommandQueue(queue);
+    clReleaseCommandQueue(queue[1]);
+    clReleaseCommandQueue(queue[0]);
     clReleaseProgram(program);
     clReleaseKernel(kernel);
 }
 
 void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *videoB, int *vrIdx, int N, int H, int W) {
+    printf("\n");
     // create buffer
-    cl_mem memR, memG, memB, memFrameMat, memDiffMat;
-    long rgb_size = sizeof(unsigned char) * H * W * N;
-    long float_nn_size = sizeof(float) * N * N;
-    float *diffFrameMat = (float*)malloc(60 * 60 * N * N * sizeof(float));
+    cl_mem memR, memG, memB, memFrameMat[2];
+    float **diffFrameMat = (float**) malloc(sizeof(float*) * 2);
 
 #ifdef PROFILING
-    cl_ulong write_start, write_end;
-    cl_ulong run_start, run_end;
-    cl_ulong read_start, read_end;
-    cl_event run_event, read_event, write_event[3];
+    cl_event run_event[2], read_event[2], write_event[2][3];
     unsigned long cpu_start, cpu_end;
 #endif
-
-    memR = clCreateBuffer(context, CL_MEM_READ_ONLY, rgb_size, NULL, &err);
+    memR = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char) * H * W * N, NULL, &err);
     CHECK_ERROR(err);
 
-    memG = clCreateBuffer(context, CL_MEM_READ_ONLY, rgb_size, NULL, &err);
+    memG = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char) * H * W * N, NULL, &err);
     CHECK_ERROR(err);
 
-    memB = clCreateBuffer(context, CL_MEM_READ_ONLY, rgb_size, NULL, &err);
+    memB = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char) * H * W * N, NULL, &err);
     CHECK_ERROR(err);
 
-    //memDiffMat = clCreateBuffer(context, CL_MEM_READ_WRITE, float_nn_size, NULL, &err);
-    //CHECK_ERROR(err);
+    int temp[2] = {0, 1};
+    for (int i = 0; i < 2; i++) {
+        diffFrameMat[i] = (float*) malloc(sizeof(float) * N * N * 60 * 60);
 
-    memFrameMat = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * 60 * 60 * N  * N, NULL, &err);
-    CHECK_ERROR(err);
-
+        memFrameMat[i] = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * 60 * 60 * N * N, NULL, &err);
+        CHECK_ERROR(err);
 
     // enqueue write buffer
 #ifdef PROFILING
-    err = clEnqueueWriteBuffer(queue, memR, CL_FALSE, 0, rgb_size, videoR, 0, NULL, &write_event[0]);
-    CHECK_ERROR(err);
-
-    err = clEnqueueWriteBuffer(queue, memG, CL_FALSE, 0, rgb_size, videoG, 0, NULL, &write_event[1]);
-    CHECK_ERROR(err);
-
-    err = clEnqueueWriteBuffer(queue, memB, CL_FALSE, 0, rgb_size, videoB, 0, NULL, &write_event[2]);
-    CHECK_ERROR(err);
+        if (i == 0) {
+            err = clEnqueueWriteBuffer(queue[i], memR, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoR, 0, NULL, &write_event[i][0]);
+            CHECK_ERROR(err);
+            err = clEnqueueWriteBuffer(queue[i], memG, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoG, 0, NULL, &write_event[i][1]);
+            CHECK_ERROR(err);
+            err = clEnqueueWriteBuffer(queue[i], memB, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoB, 0, NULL, &write_event[i][2]);
+            CHECK_ERROR(err);
+        } else {
+            err = clEnqueueWriteBuffer(queue[i], memR, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoR, 1, &write_event[i - 1][0], &write_event[i][0]);
+            CHECK_ERROR(err);
+            err = clEnqueueWriteBuffer(queue[i], memG, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoG, 1, &write_event[i - 1][0], &write_event[i][1]);
+            CHECK_ERROR(err);
+            err = clEnqueueWriteBuffer(queue[i], memB, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoB, 1, &write_event[i - 1][0], &write_event[i][2]);
+            CHECK_ERROR(err);
+        }
 #else
-    err = clEnqueueWriteBuffer(queue, memR, CL_FALSE, 0, rgb_size, videoR, 0, NULL, NULL);
-    CHECK_ERROR(err);
-
-    err = clEnqueueWriteBuffer(queue, memG, CL_FALSE, 0, rgb_size, videoG, 0, NULL, NULL);
-    CHECK_ERROR(err);
-
-    err = clEnqueueWriteBuffer(queue, memB, CL_FALSE, 0, rgb_size, videoB, 0, NULL, NULL);
-    CHECK_ERROR(err);
+        err = clEnqueueWriteBuffer(queue[i], memR, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoR, 0, NULL, NULL);
+        CHECK_ERROR(err);
+        err = clEnqueueWriteBuffer(queue[i], memG, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoG, 0, NULL, NULL);
+        CHECK_ERROR(err);
+        err = clEnqueueWriteBuffer(queue[i], memB, CL_FALSE, 0, sizeof(unsigned char) * H * W * N, videoB, 0, NULL, NULL);
+        CHECK_ERROR(err);
 #endif
+        // kernal argument setting
+        err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &memR);
+        CHECK_ERROR(err);
 
-    // kernal argument setting
-    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &memR);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &memG);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 1, sizeof(cl_mem), &memG);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 2, sizeof(cl_mem), &memB);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 2, sizeof(cl_mem), &memB);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 3, sizeof(cl_int), &N);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 3, sizeof(cl_int), &N);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 4, sizeof(cl_int), &H);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 4, sizeof(cl_int), &H);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 5, sizeof(cl_int), &W);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 5, sizeof(cl_int), &W);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 6, sizeof(cl_float) * 32 * 18, NULL);
+        CHECK_ERROR(err);
 
-    //err = clSetKernelArg(kernel, 6, sizeof(cl_mem), &memDiffMat);
-    //CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 7, sizeof(cl_mem), &memFrameMat[i]);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 6, sizeof(cl_float) * 32 * 18, NULL);
-    CHECK_ERROR(err);
+        err = clSetKernelArg(kernel, 8, sizeof(cl_int), &temp[i]);
+        CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 7, sizeof(cl_mem), &memFrameMat);
-    CHECK_ERROR(err);
-
-
-    // run kernel
-    size_t global_size[2] = {W * N, H * N};
-    size_t local_size[2] = {32, 18};
-    //size_t local_size[2] = {W, H};
-
-    //while (global_size[0] % local_size[0] != 0) global_size[0]++;
-    //while (global_size[1] % local_size[1] != 0) global_size[1]++;
-
+        size_t global_size[2];
+        if (i == 0) {
+            global_size[0] = W * N;
+            global_size[1] = H * N / 2;
+        } else {
+            global_size[0] = W * N / 2;
+            global_size[1] = H * N;
+        }
+        size_t local_size[2] = {32, 18};
 
 #ifdef PROFILING
-    printf("\n[workset] global: (%d, %d) / local: (%d, %d)\n", global_size[0], global_size[1], local_size[0], local_size[1]);
-
-    err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, &run_event);
-    CHECK_ERROR(err);
-
-    // enqueue read buffer
-    //err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, &read_event);
-    //CHECK_ERROR(err);
-
-    err = clEnqueueReadBuffer(queue, memFrameMat, CL_FALSE, 0, float_nn_size * 60 * 60, diffFrameMat, 0, NULL, &read_event);
-    CHECK_ERROR(err);
-
+        printf("[%d, workset] global: (%d, %d) / local: (%d, %d)\n", i, global_size[0], global_size[1], local_size[0], local_size[1]);
+        err = clEnqueueNDRangeKernel(queue[i], kernel, 2, NULL, global_size, local_size, 0, NULL, &run_event[i]);
+        CHECK_ERROR(err);
 #else
-    err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, NULL);
-    CHECK_ERROR(err);
+        err = clEnqueueNDRangeKernel(queue[i], kernel, 2, NULL, global_size, local_size, 0, NULL, NULL);
+        CHECK_ERROR(err);
+#endif
+        err = clFlush(queue[i]);
+        CHECK_ERROR(err);
 
     // enqueue read buffer
-    //err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, NULL);
-    //CHECK_ERROR(err);
-
-    err = clEnqueueReadBuffer(queue, memFrameMat, CL_FALSE, 0, float_nn_size * 60 * 60, diffFrameMat, 0, NULL, NULL);
-    CHECK_ERROR(err);
+#ifdef PROFILING
+        err = clEnqueueReadBuffer(queue[i], memFrameMat[i], CL_FALSE, 0, sizeof(float) * 60 * 60 * N * N , diffFrameMat[i], 0, NULL, &read_event[i]);
+        CHECK_ERROR(err);
+#else
+        err = clEnqueueReadBuffer(queue[i], memFrameMat[i[, CL_FALSE, 0, sizeof(float) * 60 * 60 * N * N , diffFrameMat[i], 0, NULL, NULL);
+        CHECK_ERROR(err);
 #endif
 
-    err = clFlush(queue);
+        err = clFlush(queue[i]);
+        CHECK_ERROR(err);
+    }
+
+    err = clFinish(queue[0]);
     CHECK_ERROR(err);
 
-    err = clFinish(queue);
+    err = clFinish(queue[1]);
     CHECK_ERROR(err);
 
 #ifdef PROFILING
@@ -240,15 +246,16 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
 
     float *diffMat = (float*)malloc(N * N * sizeof(float));
     for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
+        for (int j = i + 1; j < N; j++) {
             float sum = 0;
             for (int k = 0; k < 60; k++) {
                 for (int l = 0; l < 60; l++) {
                     int index = ((i * 60 + k) * 60 * N) + (60 * j + l);
-                    sum += diffFrameMat[index];
+                    sum += diffFrameMat[0][index];
                 }
             }
             diffMat[j * N + i] = sum;
+            diffMat[i * N + j] = sum;
         }
     }
 
@@ -282,17 +289,25 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
 #endif
 
 #ifdef PROFILING
-    clGetEventProfilingInfo(write_event[0], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &write_start, NULL);
-    clGetEventProfilingInfo(write_event[2], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &write_end, NULL);
-    printf("[write] %lu ns\n", (write_end - write_start));
+    for (int i = 0; i < 2; i++) {
+        cl_ulong write_start, write_end;
+        cl_ulong run_start, run_end;
+        cl_ulong read_start, read_end;
 
-    clGetEventProfilingInfo(run_event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &run_start, NULL);
-    clGetEventProfilingInfo(run_event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &run_end, NULL);
-    printf("[run] %lu ns\n", (run_end - run_start));
+        printf("[%d]\n", i);
 
-    clGetEventProfilingInfo(read_event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &read_start, NULL);
-    clGetEventProfilingInfo(read_event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &read_end, NULL);
-    printf("[read] %lu ns\n", (read_end - read_start));
+        clGetEventProfilingInfo(write_event[i][0], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &write_start, NULL);
+        clGetEventProfilingInfo(write_event[i][2], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &write_end, NULL);
+        printf("[write] %lu ns\n", (write_end - write_start));
+
+        clGetEventProfilingInfo(run_event[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &run_start, NULL);
+        clGetEventProfilingInfo(run_event[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &run_end, NULL);
+        printf("[run] %lu ns\n", (run_end - run_start));
+
+        clGetEventProfilingInfo(read_event[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &read_start, NULL);
+        clGetEventProfilingInfo(read_event[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &read_end, NULL);
+        printf("[read] %lu ns\n", (read_end - read_start));
+    }
 
     printf("[cpu] %lu ns\n", (cpu_end - cpu_start));
 #endif
