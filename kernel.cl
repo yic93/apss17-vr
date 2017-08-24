@@ -82,7 +82,7 @@ __kernel void recover_video(__global unsigned char* R,
 
         local_mem[0] += local_mem[9 * 32];
         diffFrameMat[frame_mat_index1] = local_mem[0];
-        diffFrameMat[frame_mat_index2] = local_mem[1];
+        diffFrameMat[frame_mat_index2] = local_mem[0];
     }
     return;
 }
