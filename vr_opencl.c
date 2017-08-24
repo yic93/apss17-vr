@@ -140,11 +140,10 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     memB = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned char) * H * W * N, NULL, &err);
     CHECK_ERROR(err);
 
-    int temp[2] = {0, 1};
     for (int i = 0; i < 2; i++) {
-        diffFrameMat[i] = (float*) malloc(sizeof(float) * N * N * 60 * 60);
+        diffFrameMat[i] = (float*) malloc(sizeof(float) * N * N * 60 * 60 / 2);
 
-        memFrameMat[i] = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * 60 * 60 * N * N, NULL, &err);
+        memFrameMat[i] = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * 60 * 60 * N * N / 2, NULL, &err);
         CHECK_ERROR(err);
 
     // enqueue write buffer
@@ -197,7 +196,7 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
         err = clSetKernelArg(kernel, 7, sizeof(cl_mem), &memFrameMat[i]);
         CHECK_ERROR(err);
 
-        err = clSetKernelArg(kernel, 8, sizeof(cl_int), &temp[i]);
+        err = clSetKernelArg(kernel, 8, sizeof(cl_int), &i);
         CHECK_ERROR(err);
 
         size_t global_size[2];
@@ -223,10 +222,10 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
 
     // enqueue read buffer
 #ifdef PROFILING
-        err = clEnqueueReadBuffer(queue[i], memFrameMat[i], CL_FALSE, 0, sizeof(float) * 60 * 60 * N * N , diffFrameMat[i], 0, NULL, &read_event[i]);
+        err = clEnqueueReadBuffer(queue[i], memFrameMat[i], CL_FALSE, 0, sizeof(float) * 60 * 60 * N * N / 2, diffFrameMat[i], 0, NULL, &read_event[i]);
         CHECK_ERROR(err);
 #else
-        err = clEnqueueReadBuffer(queue[i], memFrameMat[i[, CL_FALSE, 0, sizeof(float) * 60 * 60 * N * N , diffFrameMat[i], 0, NULL, NULL);
+        err = clEnqueueReadBuffer(queue[i], memFrameMat[i[, CL_FALSE, 0, sizeof(float) * 60 * 60 * N * N / 2, diffFrameMat[i], 0, NULL, NULL);
         CHECK_ERROR(err);
 #endif
 
