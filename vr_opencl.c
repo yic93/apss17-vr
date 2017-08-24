@@ -105,10 +105,10 @@ void release() {
 
 void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *videoB, int *vrIdx, int N, int H, int W) {
     // create buffer
-    cl_mem memR, memG, memB, memVrIdx, memDiffMat, memUsed;
+    cl_mem memR, memG, memB, memFrameMat, memDiffMat;
     long rgb_size = sizeof(unsigned char) * H * W * N;
     long float_nn_size = sizeof(float) * N * N;
-    float *diffMat = (float*)malloc(N * N * sizeof(float));
+    float *diffFrameMat = (float*)malloc(60 * 60 * N * N * sizeof(float));
 
 #ifdef PROFILING
     cl_ulong write_start, write_end;
@@ -126,7 +126,10 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     memB = clCreateBuffer(context, CL_MEM_READ_ONLY, rgb_size, NULL, &err);
     CHECK_ERROR(err);
 
-    memDiffMat = clCreateBuffer(context, CL_MEM_READ_WRITE, float_nn_size, NULL, &err);
+    //memDiffMat = clCreateBuffer(context, CL_MEM_READ_WRITE, float_nn_size, NULL, &err);
+    //CHECK_ERROR(err);
+
+    memFrameMat = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(float) * 60 * 60 * N  * N, NULL, &err);
     CHECK_ERROR(err);
 
 
@@ -170,16 +173,23 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     err = clSetKernelArg(kernel, 5, sizeof(cl_int), &W);
     CHECK_ERROR(err);
 
-    err = clSetKernelArg(kernel, 6, sizeof(cl_mem), &memDiffMat);
+    //err = clSetKernelArg(kernel, 6, sizeof(cl_mem), &memDiffMat);
+    //CHECK_ERROR(err);
+
+    err = clSetKernelArg(kernel, 6, sizeof(cl_float) * 32 * 18, NULL);
+    CHECK_ERROR(err);
+
+    err = clSetKernelArg(kernel, 7, sizeof(cl_mem), &memFrameMat);
     CHECK_ERROR(err);
 
 
     // run kernel
-    size_t global_size[2] = {N, N};
-    size_t local_size[2] = {8, 8};
+    size_t global_size[2] = {W * N, H * N};
+    size_t local_size[2] = {32, 18};
+    //size_t local_size[2] = {W, H};
 
-    while (global_size[0] % local_size[0] != 0) global_size[0]++;
-    while (global_size[1] % local_size[1] != 0) global_size[1]++;
+    //while (global_size[0] % local_size[0] != 0) global_size[0]++;
+    //while (global_size[1] % local_size[1] != 0) global_size[1]++;
 
 
 #ifdef PROFILING
@@ -189,14 +199,21 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     CHECK_ERROR(err);
 
     // enqueue read buffer
-    err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, &read_event);
+    //err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, &read_event);
+    //CHECK_ERROR(err);
+
+    err = clEnqueueReadBuffer(queue, memFrameMat, CL_FALSE, 0, float_nn_size * 60 * 60, diffFrameMat, 0, NULL, &read_event);
     CHECK_ERROR(err);
+
 #else
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_size, local_size, 0, NULL, NULL);
     CHECK_ERROR(err);
 
     // enqueue read buffer
-    err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, NULL);
+    //err = clEnqueueReadBuffer(queue, memDiffMat, CL_FALSE, 0, float_nn_size, diffMat, 0, NULL, NULL);
+    //CHECK_ERROR(err);
+
+    err = clEnqueueReadBuffer(queue, memFrmaeMat, CL_FALSE, 0, float_nn_size * 60 * 60, diffFrameMat, 0, NULL, NULL);
     CHECK_ERROR(err);
 #endif
 
@@ -206,6 +223,19 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     err = clFinish(queue);
     CHECK_ERROR(err);
 
+    float *diffMat = (float*)malloc(N * N * sizeof(float));
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            float sum = 0;
+            for (int k = 0; k < 60; k++) {
+                for (int l = 0; l < 60; l++) {
+                    int index = ((i * 60 + k) * 60 * N) + (60 * j + l);
+                    sum += diffFrameMat[index];
+                }
+            }
+            diffMat[j * N + i] = sum;
+        }
+    }
 
     int *used = (int*)calloc(N, sizeof(int));
     vrIdx[0] = 0;
