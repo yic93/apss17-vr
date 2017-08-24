@@ -9,6 +9,7 @@ __kernel void recover_video(__global unsigned char* R,
                        __global float* diffFrameMat) {
 
     __private int2 group_id = (int2) (get_group_id(0), get_group_id(1));
+    if (group_id.x >= group_id.y) return;
     __private int2 global_id = (int2) (get_global_id(0), get_global_id(1));
     __private int i = global_id.x / 1920;
     __private int j = global_id.y / 1080;
@@ -76,12 +77,12 @@ __kernel void recover_video(__global unsigned char* R,
     if (l_i == 0 && l_j == 0) {
         __private int2 index_of_group = group_id / 60;
         __private int2 index_in_group = group_id % 60;
-        __private int frame_mat_index = ((index_of_group.y * 60 + index_in_group.y) * 60 * N) + (60 * index_of_group.x + index_in_group.x);
+        __private int frame_mat_index1 = ((index_of_group.y * 60 + index_in_group.y) * 60 * N) + (60 * index_of_group.x + index_in_group.x);
+        __private int frame_mat_index2 = ((index_of_group.x * 60 + index_in_group.x) * 60 * N) + (60 * index_of_group.y + index_in_group.y);
 
         local_mem[0] += local_mem[9 * 32];
-        diffFrameMat[frame_mat_index] = local_mem[0];
+        diffFrameMat[frame_mat_index1] = local_mem[0];
+        diffFrameMat[frame_mat_index2] = local_mem[0];
     }
-    barrier(CLK_GLOBAL_MEM_FENCE);
-
     return;
 }
