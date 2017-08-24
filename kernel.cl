@@ -6,10 +6,13 @@ __kernel void recover_video(__global unsigned char* R,
                        int W,
 //                       __global float* diffMat,
                        __local float* local_mem,
-                       __global float* diffFrameMat) {
+                       __global float* diffFrameMat,
+                       int queue_number) {
 
     __private int2 group_id = (int2) (get_group_id(0), get_group_id(1));
     if (group_id.x >= group_id.y) return;
+    if(queue_number == 0 && ((group_id.x/32 > group_id.y/16) || (group_id.x/32 + group_id.y/16 < 1))) return;
+    if(queue_number == 1 && ((group_id.x/32 < group_id.y/16) || (group_id.x/32 + group_id.y/16 > 1))) return;
     __private int2 global_id = (int2) (get_global_id(0), get_global_id(1));
     __private int i = global_id.x / 1920;
     __private int j = global_id.y / 1080;
@@ -80,9 +83,9 @@ __kernel void recover_video(__global unsigned char* R,
         __private int frame_mat_index1 = ((index_of_group.y * 60 + index_in_group.y) * 60 * N) + (60 * index_of_group.x + index_in_group.x);
         __private int frame_mat_index2 = ((index_of_group.x * 60 + index_in_group.x) * 60 * N) + (60 * index_of_group.y + index_in_group.y);
 
-        local_mem[0] += local_mem[9 * 32];
+        local_mem[0] += local_mem[8 * 32];
         diffFrameMat[frame_mat_index1] = local_mem[0];
-        diffFrameMat[frame_mat_index2] = local_mem[1];
+        diffFrameMat[frame_mat_index2] = local_mem[0];
     }
     return;
 }
