@@ -193,6 +193,14 @@ void recoverVideo(unsigned char *videoR, unsigned char *videoG, unsigned char *v
     err = clSetKernelArg(kernel, 7, sizeof(cl_mem), &memFrameMat);
     CHECK_ERROR(err);
 
+    err = clSetKernelArg(kernel, 8, sizeof(cl_char) * 32 * 18 * 2, NULL);
+    CHECK_ERROR(err);
+
+    err = clSetKernelArg(kernel, 9, sizeof(cl_char) * 32 * 18 * 2, NULL);
+    CHECK_ERROR(err);
+
+    err = clSetKernelArg(kernel, 10, sizeof(cl_char) * 32 * 18 * 2, NULL);
+    CHECK_ERROR(err);
 
     // run kernel
     size_t global_size[2] = {W * N, H * N};
