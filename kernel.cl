@@ -6,7 +6,10 @@ __kernel void recover_video(__global unsigned char* R,
                        int W,
 //                       __global float* diffMat,
                        __local float* local_mem,
-                       __global float* diffFrameMat) {
+                       __global float* diffFrameMat,
+                       __local unsigned char *local_R,
+                       __local unsigned char *local_G,
+                       __local unsigned char *local_B) {
 
     __private int2 group_id = (int2) (get_group_id(0), get_group_id(1));
     if (group_id.x >= group_id.y) return;
@@ -18,12 +21,20 @@ __kernel void recover_video(__global unsigned char* R,
     __private int l_i = get_local_id(0);
     __private int l_j = get_local_id(1);
 
+    // Copy into the local memory
+    local_R[l_j * 32 + l_i] = R[(i * H + _h) * W + _w];
+    local_R[(18 + l_j) * 32 + l_i] = R[(j * H + _h) * W + _w];
+    local_G[l_j * 32 + l_i] = G[(i * H + _h) * W + _w];
+    local_G[(18 + l_j) * 32 + l_i] = G[(j * H + _h) * W + _w];
+    local_B[l_j * 32 + l_i] = B[(i * H + _h) * W + _w];
+    local_B[(18 + l_j) * 32 + l_i] = B[(j * H + _h) * W + _w];
+  
     __private int dPixel = 0;
-    __private int d = (int)R[(i * H + _h) * W + _w] - (int)R[(j * H + _h) * W + _w];
+    __private int d = (int)R[l_j * 32 + l_i] - (int)R[(18 + l_j) * 32 + l_i];
     dPixel += d * d;
-    d = (int)G[(i * H + _h) * W + _w] - (int)G[(j * H + _h) * W + _w];
+    d = (int)G[l_j * 32 + l_i] - (int)G[(18 + l_j) * 32 + l_i];
     dPixel += d * d;
-    d = (int)B[(i * H + _h) * W + _w] - (int)B[(j * H + _h) * W + _w];
+    d = (int)B[l_j * 32 + l_i] - (int)B[(18 + l_j) * 32 + l_i];
     dPixel += d * d;
 
     __private float dImg = sqrt((float) dPixel);
@@ -82,7 +93,7 @@ __kernel void recover_video(__global unsigned char* R,
 
         local_mem[0] += local_mem[9 * 32];
         diffFrameMat[frame_mat_index1] = local_mem[0];
-        diffFrameMat[frame_mat_index2] = local_mem[1];
+        diffFrameMat[frame_mat_index2] = local_mem[0];
     }
     return;
 }
