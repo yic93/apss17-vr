@@ -11,8 +11,8 @@ __kernel void recover_video(__global unsigned char* R,
 
     __private int2 group_id = (int2) (get_group_id(0), get_group_id(1));
     if (group_id.x >= group_id.y) return;
-    if(queue_number == 0 && ((group_id.x/32 > group_id.y/16) || (group_id.x/32 + group_id.y/16 < 1))) return;
-    if(queue_number == 1 && ((group_id.x/32 < group_id.y/16) || (group_id.x/32 + group_id.y/16 > 1))) return;
+    if(queue_number == 0 && ((group_id.x/N > group_id.y/N) || (group_id.x/N + group_id.y/N <= 60))) return;
+    if(queue_number == 1 && ((group_id.x/N <= group_id.y/N) || (group_id.x/N + group_id.y/N > 60))) return;
     __private int2 global_id = (int2) (get_global_id(0), get_global_id(1));
     __private int i = global_id.x / 1920;
     __private int j = global_id.y / 1080;
